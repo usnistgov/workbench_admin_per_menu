@@ -1,0 +1,9 @@
+name = Workbench Admin Per Menu
+description = I allow users to enforce workbench access adminstration to each menu.
+package = Workbench
+version = 0.1
+core = 7.x
+php = 5.2
+files[] = workbench_admin_per_menu.module
+files[] = workbench_admin_per_menu.install
+files[] = tests/workbench_admin_per_menu.test

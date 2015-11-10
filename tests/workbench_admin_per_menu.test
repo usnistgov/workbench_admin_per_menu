@@ -1,0 +1,20 @@
+<?php
+class WorkbenchAdminPerMenuTest extends DrupalWebTestCase {
+
+  public static function getInfo() {
+    return array(
+      'name' => 'workbench_admin_per_menu Unit Tests',
+      'description' => 'I am the unit tests for workbench_admin_per_menu',
+      'group' => 'Workbench'
+    );
+
+  }
+
+  /**
+   * I set up the class to be used for testing.
+   */
+  function setUp() {
+    // inject dependencies
+    parent::setUp('workbench_admin_per_menu');
+  }
+}

@@ -1,0 +1,39 @@
+<?php
+/**
+ * I am the install script for the workbench_admin_per_menu module
+ * I install a lookup table for menus to the taxonomy the Workbench module is
+ * using for access control.
+ */
+
+/**
+ * Implementation of hook_schema().
+ */
+function workbench_admin_per_menu_schema(){
+
+  $schema['workbench_admin_per_menu_menu_workbench_lookup'] = array(
+    'description' => t('The lookup table for menus to configured workbench access taxonomy.'),
+    'fields' => array(
+      'menu_name' => array(
+        'description' => 'I am the name of the Drupal menu.',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => TRUE
+      ),
+      'IDTaxonomyAccessNode' => array(
+        'description' => 'I am the ID of a Taxonomy Node which workbench is using to control access.',
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE
+      )
+    ),
+    'primary key' => array('menu_name'),
+  );
+
+  return $schema;
+}
+
+/**
+ * Implementation of hook_install().
+ */
+function workbench_admin_per_menu_install() {
+}

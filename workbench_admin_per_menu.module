@@ -1,0 +1,388 @@
+<?php
+/**
+ * Workbench Admin Per Menu
+ *
+ * I am a module that provides workbench access for core drupal menus.
+ *
+ * When enabled for specific roles, users will only be allowed to view and
+ * modify menus that are assigned to the same node of a taxonomy as they are.
+ *
+ * This module only works with Workbench when Workbench is configured to use a
+ * taxonomy content access.
+ *
+ * TODO:
+ * Restrict workbench controlled user access to ONLY their menus. Currently
+ * if a restricted user enters a URL directly they can admin any menu. BUG!!!!
+ *
+ * TODO: create global on and off switch
+ *
+ * Why and what are we doing:
+ * out of the gate: one menu per workbench group.
+ *
+ * if someone needs a special menu they go to robin who asks admin to create the
+ * menu so it shows up in the right context
+ *
+ *
+ */
+
+/**
+ * Implements hook_init().
+ */
+function workbench_admin_per_menu_init() {
+ dpm('Imma cool');
+}
+
+/**
+ * I intercept the display of the core Drupal menu select form
+ * 'admin/structure/menu' and then request a callback.
+ *
+ * @param $items
+ */
+function workbench_admin_per_menu_menu_alter(&$items) {
+  $items['admin/structure/menu']['page callback'] = 'workbench_admin_per_menu_change_menu';
+}
+
+/**
+ * I paint the core Drupal menu select screen 'admin/structure/menu' with what
+ * menus a user can edit based on their Workbench access and what's configured
+ * in the permissions screen per a users role.
+ *
+ * @return string
+ */
+function workbench_admin_per_menu_change_menu() {
+
+  // only display workbench enforced items
+  if( workbenchAdminPerMenuEnforced() ){
+
+    $menuArray = getWorkbenchAdminPerMenuUserMenu();
+
+    // build the array we use for the IN clause for the menu query
+    $menuSelectOption = array();
+    foreach($menuArray as $menu){
+
+      array_push($menuSelectOption, $menu['menu_name']);
+    }
+
+    $result = db_select('menu_custom', 'c')
+      ->fields('c')
+      ->condition('menu_name', $menuSelectOption,'IN')
+      ->execute()
+      ->fetchAll(PDO::FETCH_ASSOC);
+
+  } else { // display all the menus
+
+    $result = db_query(
+      "SELECT * FROM {menu_custom} ORDER BY title",
+      array(),
+      array('fetch' => PDO::FETCH_ASSOC)
+    );
+  }
+
+  $header = array(t('Title'), array('data' => t('Operations'), 'colspan' => '3'));
+  $rows = array();
+  foreach ($result as $menu) {
+    $row = array(theme('menu_admin_overview', array('title' => $menu['title'], 'name' => $menu['menu_name'], 'description' => $menu['description'])));
+    $row[] = array('data' => l(t('list links'), 'admin/structure/menu/manage/' . $menu['menu_name']));
+    $row[] = array('data' => l(t('edit menu'), 'admin/structure/menu/manage/' . $menu['menu_name'] . '/edit'));
+    $row[] = array('data' => l(t('add link'), 'admin/structure/menu/manage/' . $menu['menu_name'] . '/add'));
+    $rows[] = $row;
+  }
+
+  return theme('table', array('header' => $header, 'rows' => $rows));
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter()
+ */
+function workbench_admin_per_menu_form_menu_edit_menu_alter(&$form, $form_state){
+
+  $menuName = getWorkBenchAdminPerMenuNameFromFormObject( $form );
+  $permissionTID = getWorkbenchAdminPerMenuMenuPermissionTID( $menuName );
+
+  $form['workbench_admin_per_menu'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Workbench Admin Access'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+    '#group' => 'additional_settings'
+  );
+
+  $form['workbench_admin_per_menu']['description'] = array(
+    '#prefix' => '<div class="description">',
+    '#suffix' => '</div>',
+    '#markup' => t('Select the Permissions Group to restrict editing access for this menu.'),
+  );
+
+  $form['workbench_admin_per_menu'][getWorkbenchAdminPerMenuMenuFieldName()] = array(
+    '#type' => 'radios',
+    '#maxlength' => 999,
+    '#options' => getWorkbenchAdminPerMenuTaxonomyForMenuEditForm(),
+    '#required' => TRUE,
+    '#default_value' => $permissionTID
+  );
+
+  $form['#submit'][]='workbench_admin_per_menu_submit';
+}
+
+/**
+ * I am the callback for the menu edit submit form.
+ *
+ * @param $form
+ * @param $form_state
+ */
+function workbench_admin_per_menu_submit($form, &$form_state){
+
+  $menu_name = getWorkBenchAdminPerMenuNameFromFormObject( $form );
+
+  // TODO: need to deal with the scenario where they change the machine name
+  // while creating the menu... Drupal... just use UUID for PK's and don't
+  // be drunk...
+  // for new menus, need to get the value from teh form_state
+  if( strlen( $menu_name ) === 0 ){
+    // this isn't good...
+    $menu_name = 'menu-' . $form_state['input']['menu_name'];
+  }
+
+  $IDPermissionNode = $form_state['values'][getWorkbenchAdminPerMenuMenuFieldName()];
+
+  // should we insert the values into the db???
+  if ( isset($IDPermissionNode) && is_numeric($IDPermissionNode) ){
+
+    // delete then insert
+    db_delete( getWorkbenchAdminPerMenuLookupTableName() )
+      ->condition('menu_name', $menu_name, '=')
+      ->execute();
+
+    db_insert( getWorkbenchAdminPerMenuLookupTableName() )
+      ->fields(array(
+        'menu_name' => $menu_name,
+        'IDTaxonomyAccessNode' => $IDPermissionNode
+      ))
+      ->execute();
+  }
+}
+
+/**
+ * I return an array that populates the added permissions module form field.
+ *
+ * @return array
+ */
+function getWorkbenchAdminPerMenuTaxonomyForMenuEditForm(){
+
+  $vid = getWorkbenchAdminPerMenuTaxonomyID();
+
+  // do we give them everything or just stuff based on workbench taxonomy?
+  if ( workbenchAdminPerMenuEnforced() ) {
+
+    $taxonomy = getWorkbenchAdminPerMenuUserAssignedTaxonomy();
+  } else {
+
+    $taxonomy = taxonomy_get_tree($vid);
+  }
+
+  $taxonomyArray = array();
+
+  foreach( $taxonomy as $term ){
+
+    $visualLevel = '';
+
+    // add dashes for as for as many levels deep the term is. mimicking the
+    // other workbench screen. this might be done a different way but the output
+    // is the same as the other.
+    for ( $i = 1; $i <= $term->depth; $i++ ) {
+
+      $visualLevel = $visualLevel . '-';
+    }
+
+    // prefix the dashes (-) which indicate the 'level' to the node name
+    $display = $visualLevel . $term->name;
+
+    $taxonomyArray[$term->tid] = $display;
+  }
+
+  return $taxonomyArray;
+}
+
+/**
+ * I return the IDTaxonomyAccessNode value if there is one. Else I return an
+ * empty string.
+ *
+ * @param $menu_name - String. I am the name of the menu to find. I am required.
+ * @return mixed
+ */
+function getWorkbenchAdminPerMenuMenuPermissionTID( $menu_name ){
+
+  $result = db_select( getWorkbenchAdminPerMenuLookupTableName(), 'c' )
+    ->fields('c')
+    ->condition('menu_name', $menu_name,'=')
+    ->execute()
+    ->fetchAssoc();
+
+  if( is_array($result) ){
+
+    return $result['IDTaxonomyAccessNode'];
+  } else {
+
+    return '';
+  }
+}
+
+/**
+ * I return a users assigned taxonomy.
+ *
+ * @return array
+ */
+function getWorkbenchAdminPerMenuUserAssignedTaxonomy(){
+
+  $IDTaxonomy = getWorkbenchAdminPerMenuTaxonomyID();
+  $userAllPermission = getWorkbenchAdminPerMenuWorkbenchUserTaxonomyNode();
+  $fullTaxonomy = taxonomy_get_tree($IDTaxonomy);
+  $result = array();
+
+  // loop over the full taxonomy and pick out the assigned ones
+  foreach($userAllPermission as $permission){
+
+    foreach( $fullTaxonomy as $term ){
+
+      if ( $permission === $term->tid ){
+
+        array_push( $result, $term );
+        break;
+      }
+    }
+  }
+
+  return $result;
+}
+
+/**
+ * I return an array of menus used for the menu admin screen.
+ *
+ * @return mixed
+ */
+function getWorkbenchAdminPerMenuUserMenu(){
+
+  $userAllPermission = getWorkbenchAdminPerMenuWorkbenchUserTaxonomyNode();
+
+  // now query the look up table for any menus that are associated with the
+  // users assigned permissions
+  $userMenu = db_select(getWorkbenchAdminPerMenuLookupTableName(), 'c')
+    ->fields('c')
+    ->condition('IDTaxonomyAccessNode', $userAllPermission,'IN')
+    ->execute()
+    ->fetchAll(PDO::FETCH_ASSOC);
+
+  return $userMenu;
+}
+
+/**
+ * I return whether a user should have menus filtered by workbench or not.
+ *
+ * @return bool
+ */
+function workbenchAdminPerMenuEnforced(){
+
+  // check the users access rights in workbench
+  $userAccess = db_select( 'workbench_access_user', 'c' )
+    ->fields('c')
+    ->condition('uid', getWorkbenchAdminPerMenuUserID(),'=')
+    ->execute()
+    ->fetchAssoc();
+
+  if( is_array($userAccess) && $userAccess['access_id'] === 'permissions' ){
+
+    return false;
+  } else {
+
+    return true;
+  }
+}
+
+/**
+ * I return an array of node id that a user has access to.
+ *
+ * @return array
+ */
+function getWorkbenchAdminPerMenuWorkbenchUserTaxonomyNode(){
+
+  $IDUser = getWorkbenchAdminPerMenuUserID();
+  $IDTaxonomy = getWorkbenchAdminPerMenuTaxonomyID();
+
+  // get the users assigned permission TID's
+  $userTopPermission = db_select('workbench_access_user', 'c')
+    ->fields('c')
+    ->condition('uid', $IDUser,'=')
+    ->execute()
+    ->fetchAll(PDO::FETCH_ASSOC);
+
+  // now get all the children they can work on
+  $userAllPermission = array();
+
+  // loop and put the top level permission IDs into the $userAllPermission, then
+  // get their children and put their ID's into the $userAllPermission so we
+  // have them in a single array
+  foreach($userTopPermission as $row){
+
+    array_push($userAllPermission, $row['access_id']);
+
+    $temp = taxonomy_get_children($row['access_id'], $IDTaxonomy);
+
+    foreach($temp as $childrenTID){
+      array_push($userAllPermission, $childrenTID->tid);
+    }
+  }
+
+  return $userAllPermission;
+}
+
+/**
+ * I return the global users ID. I am a convince method so the developer wants
+ * to return a restricted user ID it's easy to do. Also keeps the code DRY.
+ *
+ * @return mixed
+ */
+function getWorkbenchAdminPerMenuUserID(){
+
+  global $user;
+  $IDUser = $user->uid;
+  return $IDUser;
+}
+
+/**
+ * I return the machine name of a menu when given a form object.
+ *
+ * @param $form - I am the menu edit form that was submitted.
+ * @return mixed
+ */
+function getWorkBenchAdminPerMenuNameFromFormObject( $form ){
+  return $form['menu_name']['#default_value'];
+}
+
+/**
+ * I return the look up table name that keeps association of menus to
+ * permissions.
+ *
+ * @return string
+ */
+function getWorkbenchAdminPerMenuLookupTableName(){
+  return 'workbench_admin_per_menu_menu_workbench_lookup';
+}
+
+/**
+ * I return the Menu Edit Form field name.
+ *
+ * @return string
+ */
+function getWorkbenchAdminPerMenuMenuFieldName(){
+  return 'workbench_admin_per_menu_permission_taxonomy';
+}
+
+/**
+ * I return the vid of the taxonomy used for access control by workbench.
+ *
+ * @return mixed
+ */
+function getWorkbenchAdminPerMenuTaxonomyID(){
+  // TODO: get this value from the Workbench module
+  return taxonomy_vocabulary_machine_name_load('permissions')->vid;
+}
