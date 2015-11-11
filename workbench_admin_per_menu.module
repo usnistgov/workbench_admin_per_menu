@@ -29,17 +29,64 @@
  * Implements hook_init().
  */
 function workbench_admin_per_menu_init() {
- dpm('Imma cool');
+  dpm('IN workbench_admin_per_menu_init');
 }
 
 /**
- * I intercept the display of the core Drupal menu select form
+ * I intercept the display of the all the entire Drupal menu section
  * 'admin/structure/menu' and then request a callback.
  *
  * @param $items
  */
 function workbench_admin_per_menu_menu_alter(&$items) {
+
   $items['admin/structure/menu']['page callback'] = 'workbench_admin_per_menu_change_menu';
+  $items['admin/structure/menu']['access callback'] = 'workbench_admin_per_menu_menu_access';
+  unset($items['admin/structure/menu']['access arguments']);
+  $items['admin/structure/menu/manage/%menu']['access callback'] = 'workbench_admin_per_menu_menu_access';
+  $items['admin/structure/menu/manage/%menu']['access arguments'] = array(4);
+  $items['admin/structure/menu/manage/%menu/edit']['access callback'] = 'workbench_admin_per_menu_menu_access';
+  $items['admin/structure/menu/manage/%menu/edit']['access arguments'] = array(4);
+  $items['admin/structure/menu/manage/%menu/add']['access callback'] = 'workbench_admin_per_menu_menu_access';
+  $items['admin/structure/menu/manage/%menu/add']['access arguments'] = array(4);
+  $items['admin/structure/menu/item/%menu_link/edit']['access callback'] = 'workbench_admin_per_menu_menu_link_access';
+  $items['admin/structure/menu/item/%menu_link/edit']['access arguments'] = array(4);
+  $items['admin/structure/menu/item/%menu_link/reset']['access callback'] = 'workbench_admin_per_menu_menu_link_access';
+  $items['admin/structure/menu/item/%menu_link/reset']['access arguments'] = array(4);
+  $items['admin/structure/menu/item/%menu_link/delete']['access callback'] = 'workbench_admin_per_menu_menu_link_access';
+  $items['admin/structure/menu/item/%menu_link/delete']['access arguments'] = array(4);
+}
+
+/**
+ * I check if a user has access to edit a specific menu link option.
+ *
+ * @param $menu
+ * @return bool
+ */
+function workbench_admin_per_menu_menu_link_access($menu){
+
+  // bail and give them the entire thing if permissions are set in Drupal
+  if( getWAPMUserHasMenuPermission() ) {
+    return TRUE;
+  }
+
+  // do they have access to the menu requested
+  // TODO: add logic
+  return true;
+}
+
+/**
+ * I am the access callback for the overview page of all the menus.
+ *
+ * @return bool
+ */
+function workbench_admin_per_menu_menu_access(){
+
+  if( user_is_anonymous() ){
+    return false;
+  } else {
+    return getWAPMUserHasMenuPermission() || isWAPMEnforced();
+  }
 }
 
 /**
@@ -51,37 +98,36 @@ function workbench_admin_per_menu_menu_alter(&$items) {
  */
 function workbench_admin_per_menu_change_menu() {
 
-  // only display workbench enforced items
-  if( workbenchAdminPerMenuEnforced() ){
-
-    $menuArray = getWorkbenchAdminPerMenuUserMenu();
-
-    // build the array we use for the IN clause for the menu query
-    $menuSelectOption = array();
-    foreach($menuArray as $menu){
-
-      array_push($menuSelectOption, $menu['menu_name']);
-    }
-
-    $result = db_select('menu_custom', 'c')
-      ->fields('c')
-      ->condition('menu_name', $menuSelectOption,'IN')
-      ->execute()
-      ->fetchAll(PDO::FETCH_ASSOC);
-
-  } else { // display all the menus
-
-    $result = db_query(
-      "SELECT * FROM {menu_custom} ORDER BY title",
-      array(),
-      array('fetch' => PDO::FETCH_ASSOC)
-    );
+  // bail if they have admin access
+  if (getWAPMUserHasMenuPermission()) {
+    return menu_overview_page();
   }
+
+  // paint only their menus available via workbench
+  $menuArray = getWAPMUserMenu();
+
+  // build the array we use for the IN clause for the menu query
+  $menuSelectOption = array();
+  foreach( $menuArray as $menu ){
+    array_push($menuSelectOption, $menu['menu_name']);
+  }
+
+  $result = db_select('menu_custom', 'c')
+    ->fields('c')
+    ->condition('menu_name', $menuSelectOption,'IN')
+    ->execute()
+    ->fetchAll(PDO::FETCH_ASSOC);
 
   $header = array(t('Title'), array('data' => t('Operations'), 'colspan' => '3'));
   $rows = array();
   foreach ($result as $menu) {
-    $row = array(theme('menu_admin_overview', array('title' => $menu['title'], 'name' => $menu['menu_name'], 'description' => $menu['description'])));
+    $row = array(
+      theme('menu_admin_overview', array(
+        'title' => $menu['title'],
+        'name' => $menu['menu_name'],
+        'description' => $menu['description']
+      ))
+    );
     $row[] = array('data' => l(t('list links'), 'admin/structure/menu/manage/' . $menu['menu_name']));
     $row[] = array('data' => l(t('edit menu'), 'admin/structure/menu/manage/' . $menu['menu_name'] . '/edit'));
     $row[] = array('data' => l(t('add link'), 'admin/structure/menu/manage/' . $menu['menu_name'] . '/add'));
@@ -96,8 +142,8 @@ function workbench_admin_per_menu_change_menu() {
  */
 function workbench_admin_per_menu_form_menu_edit_menu_alter(&$form, $form_state){
 
-  $menuName = getWorkBenchAdminPerMenuNameFromFormObject( $form );
-  $permissionTID = getWorkbenchAdminPerMenuMenuPermissionTID( $menuName );
+  $menuName = getWAPMNameFromFormObject( $form );
+  $permissionTID = getWAPMMenuPermissionTID( $menuName );
 
   $form['workbench_admin_per_menu'] = array(
     '#type' => 'fieldset',
@@ -113,10 +159,10 @@ function workbench_admin_per_menu_form_menu_edit_menu_alter(&$form, $form_state)
     '#markup' => t('Select the Permissions Group to restrict editing access for this menu.'),
   );
 
-  $form['workbench_admin_per_menu'][getWorkbenchAdminPerMenuMenuFieldName()] = array(
+  $form['workbench_admin_per_menu'][getWAPMMenuFieldName()] = array(
     '#type' => 'radios',
     '#maxlength' => 999,
-    '#options' => getWorkbenchAdminPerMenuTaxonomyForMenuEditForm(),
+    '#options' => getWAPMTaxonomyForMenuEditForm(),
     '#required' => TRUE,
     '#default_value' => $permissionTID
   );
@@ -132,7 +178,7 @@ function workbench_admin_per_menu_form_menu_edit_menu_alter(&$form, $form_state)
  */
 function workbench_admin_per_menu_submit($form, &$form_state){
 
-  $menu_name = getWorkBenchAdminPerMenuNameFromFormObject( $form );
+  $menu_name = getWAPMNameFromFormObject( $form );
 
   // TODO: need to deal with the scenario where they change the machine name
   // while creating the menu... Drupal... just use UUID for PK's and don't
@@ -143,17 +189,17 @@ function workbench_admin_per_menu_submit($form, &$form_state){
     $menu_name = 'menu-' . $form_state['input']['menu_name'];
   }
 
-  $IDPermissionNode = $form_state['values'][getWorkbenchAdminPerMenuMenuFieldName()];
+  $IDPermissionNode = $form_state['values'][getWAPMMenuFieldName()];
 
   // should we insert the values into the db???
   if ( isset($IDPermissionNode) && is_numeric($IDPermissionNode) ){
 
     // delete then insert
-    db_delete( getWorkbenchAdminPerMenuLookupTableName() )
+    db_delete( getWAPMLookupTableName() )
       ->condition('menu_name', $menu_name, '=')
       ->execute();
 
-    db_insert( getWorkbenchAdminPerMenuLookupTableName() )
+    db_insert( getWAPMLookupTableName() )
       ->fields(array(
         'menu_name' => $menu_name,
         'IDTaxonomyAccessNode' => $IDPermissionNode
@@ -167,14 +213,14 @@ function workbench_admin_per_menu_submit($form, &$form_state){
  *
  * @return array
  */
-function getWorkbenchAdminPerMenuTaxonomyForMenuEditForm(){
+function getWAPMTaxonomyForMenuEditForm(){
 
-  $vid = getWorkbenchAdminPerMenuTaxonomyID();
+  $vid = geWAPMTaxonomyID();
 
   // do we give them everything or just stuff based on workbench taxonomy?
-  if ( workbenchAdminPerMenuEnforced() ) {
+  if ( isWAPMEnforced() ) {
 
-    $taxonomy = getWorkbenchAdminPerMenuUserAssignedTaxonomy();
+    $taxonomy = getWAPMUserAssignedTaxonomy();
   } else {
 
     $taxonomy = taxonomy_get_tree($vid);
@@ -210,9 +256,9 @@ function getWorkbenchAdminPerMenuTaxonomyForMenuEditForm(){
  * @param $menu_name - String. I am the name of the menu to find. I am required.
  * @return mixed
  */
-function getWorkbenchAdminPerMenuMenuPermissionTID( $menu_name ){
+function getWAPMMenuPermissionTID( $menu_name ){
 
-  $result = db_select( getWorkbenchAdminPerMenuLookupTableName(), 'c' )
+  $result = db_select( getWAPMLookupTableName(), 'c' )
     ->fields('c')
     ->condition('menu_name', $menu_name,'=')
     ->execute()
@@ -232,10 +278,10 @@ function getWorkbenchAdminPerMenuMenuPermissionTID( $menu_name ){
  *
  * @return array
  */
-function getWorkbenchAdminPerMenuUserAssignedTaxonomy(){
+function getWAPMUserAssignedTaxonomy(){
 
-  $IDTaxonomy = getWorkbenchAdminPerMenuTaxonomyID();
-  $userAllPermission = getWorkbenchAdminPerMenuWorkbenchUserTaxonomyNode();
+  $IDTaxonomy = geWAPMTaxonomyID();
+  $userAllPermission = getWAPMWorkbenchUserTaxonomyNode();
   $fullTaxonomy = taxonomy_get_tree($IDTaxonomy);
   $result = array();
 
@@ -260,32 +306,38 @@ function getWorkbenchAdminPerMenuUserAssignedTaxonomy(){
  *
  * @return mixed
  */
-function getWorkbenchAdminPerMenuUserMenu(){
+function getWAPMUserMenu(){
 
-  $userAllPermission = getWorkbenchAdminPerMenuWorkbenchUserTaxonomyNode();
+  $userAllPermission = getWAPMWorkbenchUserTaxonomyNode();
 
-  // now query the look up table for any menus that are associated with the
-  // users assigned permissions
-  $userMenu = db_select(getWorkbenchAdminPerMenuLookupTableName(), 'c')
-    ->fields('c')
-    ->condition('IDTaxonomyAccessNode', $userAllPermission,'IN')
-    ->execute()
-    ->fetchAll(PDO::FETCH_ASSOC);
+  if(is_array($userAllPermission) && count($userAllPermission)){
+    // now query the look up table for any menus that are associated with the
+    // users assigned permissions
+    $userMenu = db_select(getWAPMLookupTableName(), 'c')
+      ->fields('c')
+      ->condition('IDTaxonomyAccessNode', $userAllPermission,'IN')
+      ->execute()
+      ->fetchAll(PDO::FETCH_ASSOC);
 
-  return $userMenu;
+    return $userMenu;
+  } else {
+    return array();
+  }
 }
+
+
 
 /**
  * I return whether a user should have menus filtered by workbench or not.
  *
  * @return bool
  */
-function workbenchAdminPerMenuEnforced(){
+function isWAPMEnforced(){
 
   // check the users access rights in workbench
   $userAccess = db_select( 'workbench_access_user', 'c' )
     ->fields('c')
-    ->condition('uid', getWorkbenchAdminPerMenuUserID(),'=')
+    ->condition('uid', getWAPMUserID(),'=')
     ->execute()
     ->fetchAssoc();
 
@@ -303,10 +355,10 @@ function workbenchAdminPerMenuEnforced(){
  *
  * @return array
  */
-function getWorkbenchAdminPerMenuWorkbenchUserTaxonomyNode(){
+function getWAPMWorkbenchUserTaxonomyNode(){
 
-  $IDUser = getWorkbenchAdminPerMenuUserID();
-  $IDTaxonomy = getWorkbenchAdminPerMenuTaxonomyID();
+  $IDUser = getWAPMUserID();
+  $IDTaxonomy = geWAPMTaxonomyID();
 
   // get the users assigned permission TID's
   $userTopPermission = db_select('workbench_access_user', 'c')
@@ -341,7 +393,7 @@ function getWorkbenchAdminPerMenuWorkbenchUserTaxonomyNode(){
  *
  * @return mixed
  */
-function getWorkbenchAdminPerMenuUserID(){
+function getWAPMUserID(){
 
   global $user;
   $IDUser = $user->uid;
@@ -354,7 +406,7 @@ function getWorkbenchAdminPerMenuUserID(){
  * @param $form - I am the menu edit form that was submitted.
  * @return mixed
  */
-function getWorkBenchAdminPerMenuNameFromFormObject( $form ){
+function getWAPMNameFromFormObject( $form ){
   return $form['menu_name']['#default_value'];
 }
 
@@ -364,7 +416,7 @@ function getWorkBenchAdminPerMenuNameFromFormObject( $form ){
  *
  * @return string
  */
-function getWorkbenchAdminPerMenuLookupTableName(){
+function getWAPMLookupTableName(){
   return 'workbench_admin_per_menu_menu_workbench_lookup';
 }
 
@@ -373,7 +425,7 @@ function getWorkbenchAdminPerMenuLookupTableName(){
  *
  * @return string
  */
-function getWorkbenchAdminPerMenuMenuFieldName(){
+function getWAPMMenuFieldName(){
   return 'workbench_admin_per_menu_permission_taxonomy';
 }
 
@@ -382,7 +434,17 @@ function getWorkbenchAdminPerMenuMenuFieldName(){
  *
  * @return mixed
  */
-function getWorkbenchAdminPerMenuTaxonomyID(){
+function geWAPMTaxonomyID(){
   // TODO: get this value from the Workbench module
   return taxonomy_vocabulary_machine_name_load('permissions')->vid;
+}
+
+
+/**
+ * I return whether a user has Menu permissions access set by Drupal
+ *
+ * @return bool
+ */
+function getWAPMUserHasMenuPermission(){
+  return user_access('administer menu');
 }
