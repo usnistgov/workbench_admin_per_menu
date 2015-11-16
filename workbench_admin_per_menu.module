@@ -27,8 +27,6 @@
  *
  * if someone needs a special menu they go to robin who asks admin to create the
  * menu so it shows up in the right context
- *
- *
  */
 
 /**
@@ -267,10 +265,9 @@ function workbench_admin_per_menu_submit($form, &$form_state){
 
   $IDPermissionNode = $form_state['values'][getWAPMMenuFieldName()];
 
-  // should we insert the values into the db???
+  // should we insert the values into the db and if so delete and insert.
   if ( isset($IDPermissionNode) && is_numeric($IDPermissionNode) ){
 
-    // delete then insert
     db_delete( getWAPMLookupTableName() )
       ->condition('menu_name', $menu_name, '=')
       ->execute();
@@ -294,10 +291,8 @@ function getWAPMTaxonomyForMenuEditForm(){
 
   // do we give them everything or just stuff based on workbench taxonomy?
   if ( isWAPMEnforced() ) {
-
     $taxonomy = getWAPMUserAssignedTaxonomy();
   } else {
-
     $taxonomy = taxonomy_get_tree($vid);
   }
 
