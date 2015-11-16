@@ -2,13 +2,14 @@
 /**
  * Workbench Admin Per Menu
  *
- * I am a module that provides workbench access for core drupal menus.
+ * I am a module that provides workbench access control for core drupal menus.
  *
- * When enabled for specific roles, users will only be allowed to view and
- * modify menus that are assigned to the same node of a taxonomy as they are.
+ * When enabled for specific roles via permissions, users will only be allowed
+ * to see and modify menus that are assigned to the same node of a taxonomy as
+ * they are.
  *
  * This module only works with Workbench when Workbench is configured to use a
- * taxonomy content access.
+ * taxonomy for content access.
  *
  * TODO:
  * Restrict workbench controlled user access to ONLY their menus. Currently
@@ -18,7 +19,6 @@
  *
  * TODO: enforce 'admin/structure/menu/manage/%menu/edit' so only Drupal menu access
  * control can use this link.
- *
  *
  * -----------------------------------------------------------------------------
  *
@@ -45,15 +45,13 @@ function workbench_admin_per_menu_permission() {
   return array(
     'administer workbench admin per menu' => array(
       'title' => t('Administer Workbench Admin Per Menu'),
-      'description' => t('Allow users to work with menus based on their assigned Workbench access.'),
+      'description' => t('Allow users to only work with menus based on their assigned Workbench access.'),
     ),
   );
 }
 
-
-
 /**
- * I intercept all of the Drupal menu administration 'admin/structure/menu'
+ * I intercept all of the Drupal menu administration 'admin/structure/menu/*'
  * and request callbacks.
  *
  * @param $items
@@ -86,29 +84,26 @@ function workbench_admin_per_menu_menu_alter(&$items) {
  */
 function workbench_admin_per_menu_form_alter(&$form, $form_state, $form_id){
 
-  // buy pass the user has admin menu access permission rights set by Drupal
-  if(getWAPMUserHasDrupalAdminPermission()){
+  // If the user has admin menu rights set by Drupal return here and bypass
+  if( getWAPMUserHasDrupalAdminPermission() ){
     return true;
   }
 
-  // if the menu is present in what ever form were displaying
-  if(isset($form['menu']['link']['parent']) && !user_access('administer menu')){
+  // the menu form element data is present apply workbench restrictions
+  if(isset($form['menu']['link']['parent'])){
 
     // default to no access
     $form['menu']['#access'] = FALSE;
 
-    // If they are controlled by WAPM then give them menu access and populate
+    // If they are controlled by WAPM give them menu access and then populate
     // the menu select list
     if (getWAPMUserHasMenuPermission()) {
 
-      // if they are controlled by workbench_admin_per_menu give them access
       $form['menu']['#access'] = TRUE;
-      
+
       $userMenuArray = getWAPMUserMenu();
       $allMenuArray = array_keys($form['menu']['link']['parent']['#options']);
       $availableMenuOptionArray = array();
-
-      dpm($userMenuArray);
 
       foreach ($userMenuArray as $userMenu) {
 
@@ -118,17 +113,15 @@ function workbench_admin_per_menu_form_alter(&$form, $form_state, $form_id){
           $drupalMenuNameToCheck = explode(':', $drupalMenu)[0];
 
           if($userMenuNameToCheck === $drupalMenuNameToCheck){
-
             $availableMenuOptionArray[$drupalMenu] = $form['menu']['link']['parent']['#options'][$drupalMenu];
           }
         }
       }
 
-      dpm($availableMenuOptionArray);
-      dpm($form['menu']['link']['parent']['#options']);
+      // overwrite the options with ones the user has access to
       $form['menu']['link']['parent']['#options'] = $availableMenuOptionArray;
 
-      /*
+      /* TODO: set the current value
       if (empty($form['menu']['link']['mlid']['#value']) && !in_array($form['menu']['link']['parent']['#default_value'], $avaiableMenuOptionArray)) {
         $form['menu']['link']['parent']['#default_value'] = $avaiableMenuOptionArray[0];
       }
@@ -159,8 +152,8 @@ function workbench_admin_per_menu_menu_access(){
  */
 function workbench_admin_per_menu_menu_link_access($menu){
 
-  // bail and give them the entire thing if permissions are set in Drupal
-  if( getWAPMUserHasMenuPermission() ) {
+  // If the user has admin menu rights set by Drupal return here and bypass
+  if( getWAPMUserHasDrupalAdminPermission() ) {
     return TRUE;
   }
 
@@ -178,16 +171,17 @@ function workbench_admin_per_menu_menu_link_access($menu){
  */
 function workbench_admin_per_menu_change_menu() {
 
-  // bail if they have admin access
+  // If the user has admin menu rights set by Drupal return here and bypass
   if (getWAPMUserHasDrupalAdminPermission()) {
     return menu_overview_page();
   }
 
-  // paint only their menus available via workbench
+  // get a users menus based on their workbench access
   $menuArray = getWAPMUserMenu();
 
   // build the array we use for the IN clause for the menu query
   $menuSelectOption = array();
+
   foreach( $menuArray as $menu ){
     array_push($menuSelectOption, $menu['menu_name']);
   }
@@ -289,7 +283,6 @@ function workbench_admin_per_menu_submit($form, &$form_state){
       ->execute();
   }
 }
-
 /**
  * I return an array that populates the added permissions module form field.
  *
@@ -347,10 +340,8 @@ function getWAPMMenuPermissionTID( $menu_name ){
     ->fetchAssoc();
 
   if( is_array($result) ){
-
     return $result['IDTaxonomyAccessNode'];
   } else {
-
     return '';
   }
 }
@@ -422,10 +413,8 @@ function isWAPMEnforced(){
     ->fetchAssoc();
 
   if( is_array($userAccess) && $userAccess['access_id'] === 'permissions' ){
-
     return false;
   } else {
-
     return true;
   }
 }
@@ -478,7 +467,6 @@ function getWAPMUserID(){
   global $user;
   $IDUser = $user->uid;
   return $IDUser;
-
 }
 
 /**
@@ -540,7 +528,6 @@ function getWAPMUserHasDrupalAdminPermission(){
  * @return bool
  */
 function getWAPMUserHasMenuPermission(){
-
   if (user_access('administer menu') || user_access('administer workbench admin per menu')){
     return true;
   } else {

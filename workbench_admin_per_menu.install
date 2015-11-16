@@ -35,5 +35,7 @@ function workbench_admin_per_menu_schema(){
 /**
  * Implementation of hook_install().
  */
+/*
 function workbench_admin_per_menu_install() {
 }
+*/

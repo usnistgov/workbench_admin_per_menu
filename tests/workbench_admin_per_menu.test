@@ -17,4 +17,26 @@ class WorkbenchAdminPerMenuTest extends DrupalWebTestCase {
     // inject dependencies
     parent::setUp('workbench_admin_per_menu');
   }
+
+  public function testGeWAPMTaxonomyID() {
+    $vid = geWAPMTaxonomyID();
+
+    $result = false;
+    if(is_numeric($vid)){
+      $result = true;
+    }
+
+    $message = 'VID returned should be numeric.';
+    $this->assertTrue($result, $message);
+  }
+
+  public function testGetWAPMUserHasDrupalAdminPermission(){
+    //$loggedInUser
+
+    $result = getWAPMUserHasDrupalAdminPermission();
+    $message = 'Admin running tests should have admin rights.';
+    $this->assertTrue($result, $message);
+
+  }
+
 }

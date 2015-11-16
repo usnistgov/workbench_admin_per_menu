@@ -1,7 +1,7 @@
 name = Workbench Admin Per Menu
-description = I allow users to enforce workbench access adminstration to each menu.
-package = Workbench
-version = 0.1
+description = I allow Administrators to enforce workbench access menus if Workbench is configured to use a taxonomy.
+package = Workbench Admin Per Menu
+version = 0.5
 core = 7.x
 php = 5.2
 files[] = workbench_admin_per_menu.module
