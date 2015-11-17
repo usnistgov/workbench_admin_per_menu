@@ -61,7 +61,7 @@ function workbench_admin_per_menu_menu_alter(&$items) {
   unset($items['admin/structure/menu']['access arguments']);
   $items['admin/structure/menu/manage/%menu']['access callback'] = 'workbench_admin_per_menu_menu_access';
   $items['admin/structure/menu/manage/%menu']['access arguments'] = array(4);
-  $items['admin/structure/menu/manage/%menu/edit']['access callback'] = 'workbench_admin_per_menu_menu_access';
+  $items['admin/structure/menu/manage/%menu/edit']['access callback'] = 'workbench_admin_per_menu_menu_edit_access';
   $items['admin/structure/menu/manage/%menu/edit']['access arguments'] = array(4);
   $items['admin/structure/menu/manage/%menu/add']['access callback'] = 'workbench_admin_per_menu_menu_access';
   $items['admin/structure/menu/manage/%menu/add']['access arguments'] = array(4);
@@ -74,7 +74,97 @@ function workbench_admin_per_menu_menu_alter(&$items) {
 }
 
 /**
+ * I am the access callback for the menu administration overview page.
+ *
+ * @return bool
+ */
+function workbench_admin_per_menu_menu_access(){
+  if( user_is_anonymous() ){
+    return false;
+  } else {
+    return getWAPMUserHasMenuPermission();
+  }
+}
+
+/**
+ * I am the access callback to check if user has admin rights to edit menus.
+ *
+ * @return bool
+ */
+function workbench_admin_per_menu_menu_edit_access(){
+  if (getWAPMUserHasDrupalAdminPermission()){
+    return true;
+  } else {
+    return false;
+  }
+}
+
+/**
+ * I am the access callback to check if a user has access to edit a specific
+ * menu link option.
+ *
+ * @param $menu
+ * @return bool
+ */
+function workbench_admin_per_menu_menu_link_access( $menu ){
+
+  // If the user has admin menu rights set by Drupal return here and bypass
+  if( getWAPMUserHasDrupalAdminPermission() ) {
+    return TRUE;
+  }
+
+  dpm('her in my car');
+  dpm($menu);
+
+  // do they have access to the menu requested
+  // TODO: add logic
+  return true;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter()
+ */
+function workbench_admin_per_menu_form_menu_edit_item_alter(&$form, $form_state, $form_id) {
+
+  // If the user has admin menu rights set by Drupal return here and bypass
+  if( getWAPMUserHasDrupalAdminPermission() ) {
+    return TRUE;
+  }
+
+  // the menu form element data is present apply workbench restrictions
+  if(isset($form['parent'])){
+
+    // If they are controlled by WAPM give them menu access and then populate
+    // the menu select list
+    if (getWAPMUserHasMenuPermission()) {
+
+      $userMenuArray = getWAPMUserMenu();
+      $allMenuArray = array_keys($form['parent']['#options']);
+      $availableMenuOptionArray = array();
+
+      foreach ($userMenuArray as $userMenu) {
+
+        foreach ($allMenuArray as $drupalMenu){
+
+          $userMenuNameToCheck = $userMenu['menu_name'];
+          $drupalMenuNameToCheck = explode(':', $drupalMenu)[0];
+
+          if($userMenuNameToCheck === $drupalMenuNameToCheck){
+            $availableMenuOptionArray[$drupalMenu] = $form['parent']['#options'][$drupalMenu];
+          }
+        }
+      }
+
+      $form['parent']['#options'] = $availableMenuOptionArray;
+    }
+  }
+}
+
+/**
  * Implements hook_form_alter().
+ *
+ * I alter the menu options in the additional_settings
+ *
  * @param $form
  * @param $form_state
  * @param $form_id
@@ -116,48 +206,27 @@ function workbench_admin_per_menu_form_alter(&$form, $form_state, $form_id){
         }
       }
 
-      // overwrite the options with ones the user has access to
-      $form['menu']['link']['parent']['#options'] = $availableMenuOptionArray;
+      // if someone else has put the node in another menu they don't have access
+      // too, disable the inputs and let them know
+      if (!in_array($form['menu']['link']['parent']['#default_value'], $availableMenuOptionArray)){
 
-      /* TODO: set the current value
-      if (empty($form['menu']['link']['mlid']['#value']) && !in_array($form['menu']['link']['parent']['#default_value'], $avaiableMenuOptionArray)) {
-        $form['menu']['link']['parent']['#default_value'] = $avaiableMenuOptionArray[0];
+        $form['menu']['#access'] = false;
+
+        $form['workbench_admin_per_menu'] = array(
+          '#type' => 'fieldset',
+          '#title' => t('Menu'),
+          '#group' => 'additional_settings',
+          '#collapsible' => TRUE,
+          '#collapsed' => TRUE,
+          '#weight' => 2,
+        );
+
+        $menuName = explode(':', $form['menu']['link']['parent']['#default_value'])[0];
+        $output = '<p>' . t('This content has been assigned to menu: <b>"'.$menuName.'"</b> for which you do not have access. So stuff it cat-face.') . '</p>';
+        $form['workbench_admin_per_menu']['help_text'] = array('#markup' => $output);
       }
-      */
     }
   }
-}
-
-/**
- * I am the access callback for the menu administration overview page.
- *
- * @return bool
- */
-function workbench_admin_per_menu_menu_access(){
-
-  if( user_is_anonymous() ){
-    return false;
-  } else {
-    return getWAPMUserHasMenuPermission();
-  }
-}
-
-/**
- * I check if a user has access to edit a specific menu link option.
- *
- * @param $menu
- * @return bool
- */
-function workbench_admin_per_menu_menu_link_access($menu){
-
-  // If the user has admin menu rights set by Drupal return here and bypass
-  if( getWAPMUserHasDrupalAdminPermission() ) {
-    return TRUE;
-  }
-
-  // do they have access to the menu requested
-  // TODO: add logic
-  return true;
 }
 
 /**
