@@ -1,6 +1,29 @@
 <?php
 class WorkbenchAdminPerMenuTest extends DrupalWebTestCase {
 
+  /**
+   * I am a user that has access controlled by Workbench_admin_per_menu
+   * @var
+   */
+  var $userRestrictedByWAPM;
+
+  /**
+   * I am an administrative user that has access grated to
+   * @var
+   */
+  var $userAdministrator;
+
+  /**
+   * I am an anonymous user.
+   * @var
+   */
+  var $anonymousUser;
+
+
+  /**
+   * I return information about this test class.
+   * @return array
+   */
   public static function getInfo() {
     return array(
       'name' => 'workbench_admin_per_menu Unit Tests',
@@ -11,32 +34,110 @@ class WorkbenchAdminPerMenuTest extends DrupalWebTestCase {
   }
 
   /**
-   * I set up the class to be used for testing.
+   * I set up the class to be used for testing. I am fired by the SimpleTest
+   * Framework.
    */
   function setUp() {
     // inject dependencies
     parent::setUp('workbench_admin_per_menu');
-  }
 
-  public function testGeWAPMTaxonomyID() {
-    $vid = geWAPMTaxonomyID();
+    // create the administrator
+    $adminPermissions = array(
+      'administer menu'
+    );
 
-    $result = false;
-    if(is_numeric($vid)){
-      $result = true;
-    }
+    $this->userAdministrator = $this->drupalCreateUser($adminPermissions);
 
-    $message = 'VID returned should be numeric.';
-    $this->assertTrue($result, $message);
-  }
+    // create the restricted user
+    $restrictedPermissions = array(
+      'administer workbench admin per menu'
+    );
 
-  public function testGetWAPMUserHasDrupalAdminPermission(){
-    //$loggedInUser
+    $this->userRestrictedByWAPM = $this->drupalCreateUser($restrictedPermissions);
 
-    $result = getWAPMUserHasDrupalAdminPermission();
-    $message = 'Admin running tests should have admin rights.';
-    $this->assertTrue($result, $message);
+    // create the anonymous user
+    $this->anonymousUser = $this->drupalCreateUser(array());
 
   }
 
+  /**
+   * I perform tear down functionality after all tests have been rin. I am fired
+   * by the SimpleTest framework.
+   */
+  function tearDown() {
+    parent::tearDown();
+  }
+
+  /**
+   * I test menu admin screen access
+   */
+  // admins
+  public function testWorkbench_admin_per_menu_menu_access_forAdmins(){
+    $this->drupalLogin($this->userAdministrator);
+
+    $result = workbench_admin_per_menu_menu_access();
+    $this->assertTrue($result, 'The admin should have access');
+  }
+  // users
+  public function testWorkbench_admin_per_menu_menu_access_forUsers(){
+    $this->drupalLogin($this->userRestrictedByWAPM);
+
+    $result = workbench_admin_per_menu_menu_access();
+    $this->assertTrue($result, 'The user should have access');
+  }
+  // anonymous
+  public function testWorkbench_admin_per_menu_menu_access_forAnonymousUser(){
+    $this->drupalLogin($this->anonymousUser);
+
+    $result = workbench_admin_per_menu_menu_access();
+    $this->assertTrue($result, 'The anonymous user should not have access');
+  }
+
+
+  /**
+   * I ensure that only users with permissions can edit menus
+   */
+  // admins
+  public function testWorkbench_admin_per_menu_menu_edit_access_forAdmins(){
+    $this->drupalLogin($this->userAdministrator);
+
+    $result = workbench_admin_per_menu_menu_edit_access();
+    $this->assertTrue($result, 'The admin should have access');
+  }
+  // users
+  public function testWorkbench_admin_per_menu_menu_edit_access_forUsers(){
+    $this->drupalLogin($this->userRestrictedByWAPM);
+
+    $result = workbench_admin_per_menu_menu_edit_access();
+    $this->assertTrue($result, 'The user should not have access');
+  }
+
+
+
+
+  /**
+   * I ensure that only users with permissions can edit menu links
+   */
+  // admin
+  public function testWorkbench_admin_per_menu_menu_link_access_forAdmins(){
+    $this->drupalLogin($this->userAdministrator);
+
+    $menu = array('menu_name' => 'foo');
+
+    $result = workbench_admin_per_menu_menu_link_access($menu);
+    $this->assertTrue($result, 'The admin should have access');
+
+    $this->drupalLogout();
+  }
+  // users
+  public function testWorkbench_admin_per_menu_menu_link_access_forUsers(){
+   $this->drupalLogin($this->userRestrictedByWAPM);
+
+    $menu = array('menu_name' => 'foo');
+
+    $result = getWAPMUserHasDrupalAdminPermission($menu);
+    $this->assertFalse($result, 'The user should not have access');
+
+    $this->drupalLogout();
+  }
 }

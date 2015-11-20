@@ -1,6 +1,6 @@
 <?php
 /**
- * Workbench Admin Per Menu
+ * @file Workbench Admin Per Menu
  *
  * I am a module that provides workbench access control for core drupal menus.
  *
@@ -9,35 +9,16 @@
  * they are.
  *
  * This module only works with Workbench when Workbench is configured to use a
- * taxonomy for content access.
- *
- * TODO:
- * Restrict workbench controlled user access to ONLY their menus. Currently
- * if a restricted user enters a URL directly they can admin any menu. BUG!!!!
- *
- * TODO: create global on and off switch
- *
- * TODO: enforce 'admin/structure/menu/manage/%menu/edit' so only Drupal menu access
- * control can use this link.
- *
- * -----------------------------------------------------------------------------
- *
- * Why and what are we doing:
- * out of the gate: one menu per workbench group.
- *
- * if someone needs a special menu they go to robin who asks admin to create the
- * menu so it shows up in the right context
+ * SINGLE TAXONOMY for access control. Multiple taxonomies are not supported
+ * at this time.
  */
-
-/**
- * Implements hook_init().
- */
-function workbench_admin_per_menu_init() {
-  dpm('IN workbench_admin_per_menu_init');
-}
 
 /**
  * Implements hook_permission().
+ *
+ * I add permissions which will enforce that users in the selected roles can
+ * only access menus that are assigned to the same taxonomy they are in
+ * Workbench.
  */
 function workbench_admin_per_menu_permission() {
   return array(
@@ -51,6 +32,8 @@ function workbench_admin_per_menu_permission() {
 /**
  * I intercept all of the Drupal menu administration 'admin/structure/menu/*'
  * and request callbacks.
+ *
+ * Implements hook_FORM_ID_alter().
  *
  * @param $items
  */
@@ -113,16 +96,30 @@ function workbench_admin_per_menu_menu_link_access( $menu ){
     return TRUE;
   }
 
-  dpm('her in my car');
-  dpm($menu);
+  $hasAccess = false;
+  $userMenuArray = getWAPMUserMenu();
 
-  // do they have access to the menu requested
-  // TODO: add logic
-  return true;
+  foreach( $userMenuArray as $item ){
+
+    if($item['menu_name'] === $menu['menu_name']){
+      $hasAccess = true;
+      break;
+    }
+  }
+
+  return $hasAccess;
 }
 
 /**
+ * I alter the Parent Link select list to limit whats displayed based on a users
+ * Workbench access if needed.
+ *
  * Implements hook_form_FORM_ID_alter()
+ *
+ * @param $form
+ * @param $form_state
+ * @param $form_id
+ * @return bool
  */
 function workbench_admin_per_menu_form_menu_edit_item_alter(&$form, $form_state, $form_id) {
 
@@ -156,6 +153,8 @@ function workbench_admin_per_menu_form_menu_edit_item_alter(&$form, $form_state,
       }
 
       $form['parent']['#options'] = $availableMenuOptionArray;
+
+      return true;
     }
   }
 }
@@ -323,12 +322,9 @@ function workbench_admin_per_menu_submit($form, &$form_state){
 
   $menu_name = getWAPMNameFromFormObject( $form );
 
-  // TODO: need to deal with the scenario where they change the machine name
-  // while creating the menu... Drupal... just use UUID for PK's and don't
-  // be drunk...
-  // for new menus, need to get the value from teh form_state
   if( strlen( $menu_name ) === 0 ){
-    // this isn't good...
+    // don't like doing this... wish drupal did it differently and didn't append
+    // the string like this.
     $menu_name = 'menu-' . $form_state['input']['menu_name'];
   }
 
@@ -568,8 +564,20 @@ function getWAPMMenuFieldName(){
  * @return mixed
  */
 function geWAPMTaxonomyID(){
-  // TODO: get this value from the Workbench module
-  return taxonomy_vocabulary_machine_name_load('permissions')->vid;
+
+  // TODO: What to do about multipule configured taxonomies?????
+
+  // get workbenches taxonomies that are assigned as access controls
+  $taxonomyArray = variable_get('workbench_access_taxonomy', array());
+  $machineName = '';
+
+  foreach ($taxonomyArray as $item) {
+    if(is_string($item)){
+      $machineName = $item;
+    }
+  }
+
+  return taxonomy_vocabulary_machine_name_load( $machineName )->vid;
 }
 
 /**
