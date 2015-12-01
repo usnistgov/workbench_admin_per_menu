@@ -12,5 +12,5 @@ This module only works with Workbench when Workbench is configured to use a SING
 
 When installed go to the permissions screen and select which roles should have their menu access enforced by Workbench.
 
-Other users (typically Administrators) should be give menu permissions normally provided by Drupal. If a role is both under this modules control AND assigned normal Drupal access the Drupal access takes precedence.
+Other users (typically Administrators) should be given menu permissions normally provided by Drupal. If a role is both under this modules control AND assigned normal Drupal access the Drupal access takes precedence.
 

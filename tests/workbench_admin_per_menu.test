@@ -19,7 +19,6 @@ class WorkbenchAdminPerMenuTest extends DrupalWebTestCase {
    */
   var $anonymousUser;
 
-
   /**
    * I return information about this test class.
    * @return array
@@ -28,7 +27,7 @@ class WorkbenchAdminPerMenuTest extends DrupalWebTestCase {
     return array(
       'name' => 'workbench_admin_per_menu Unit Tests',
       'description' => 'I am the unit tests for workbench_admin_per_menu',
-      'group' => 'Workbench'
+      'group' => 'Workbench Menu Admin Per Menu'
     );
 
   }
@@ -61,7 +60,7 @@ class WorkbenchAdminPerMenuTest extends DrupalWebTestCase {
   }
 
   /**
-   * I perform tear down functionality after all tests have been rin. I am fired
+   * I perform tear down functionality after all tests have been run. I am fired
    * by the SimpleTest framework.
    */
   function tearDown() {
@@ -93,7 +92,6 @@ class WorkbenchAdminPerMenuTest extends DrupalWebTestCase {
     $this->assertTrue($result, 'The anonymous user should not have access');
   }
 
-
   /**
    * I ensure that only users with permissions can edit menus
    */
@@ -111,9 +109,6 @@ class WorkbenchAdminPerMenuTest extends DrupalWebTestCase {
     $result = workbench_admin_per_menu_menu_edit_access();
     $this->assertTrue($result, 'The user should not have access');
   }
-
-
-
 
   /**
    * I ensure that only users with permissions can edit menu links

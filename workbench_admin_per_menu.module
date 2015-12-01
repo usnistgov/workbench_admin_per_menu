@@ -221,7 +221,7 @@ function workbench_admin_per_menu_form_alter(&$form, $form_state, $form_id){
         );
 
         $menuName = explode(':', $form['menu']['link']['parent']['#default_value'])[0];
-        $output = '<p>' . t('This content has been assigned to menu: <b>"'.$menuName.'"</b> for which you do not have access. So stuff it cat-face.') . '</p>';
+        $output = '<p>' . t('This content has been assigned to menu: <b>"'.$menuName.'"</b> for which you do not have access.') . '</p>';
         $form['workbench_admin_per_menu']['help_text'] = array('#markup' => $output);
       }
     }
@@ -565,7 +565,7 @@ function getWAPMMenuFieldName(){
  */
 function geWAPMTaxonomyID(){
 
-  // TODO: What to do about multipule configured taxonomies?????
+  // TODO: What to do about multiple configured taxonomies????
 
   // get workbenches taxonomies that are assigned as access controls
   $taxonomyArray = variable_get('workbench_access_taxonomy', array());
