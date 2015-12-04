@@ -375,8 +375,6 @@ function isNodeAvailableForAssignmentToMenu($availableMenuOptionArray){
   $lastInTrail = end($trail);
   $menuName = $lastInTrail['menu_name'];
 
-  dpm($menuName);
-
   // first test if the node is NOT assigned...
   if($defaultMenuName === $menuName){
     $testOne = true;
