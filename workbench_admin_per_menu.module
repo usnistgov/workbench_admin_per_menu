@@ -176,7 +176,7 @@ function workbench_admin_per_menu_form_alter(&$form, $form_state, $form_id){
     return true;
   }
 
-  // the menu form element data is present apply workbench restrictions
+  // the menu form element data is present so apply workbench restrictions
   if(isset($form['menu']['link']['parent'])){
 
     // default to no access
@@ -185,6 +185,13 @@ function workbench_admin_per_menu_form_alter(&$form, $form_state, $form_id){
     // If they are controlled by WAPM give them menu access and then populate
     // the menu select list
     if (getWAPMUserHasMenuPermission()) {
+
+      // if (the page a NOT menu link
+      //  OR
+      //    is the page in any menu the user has access to
+      //  ){ show the menu stuff}
+      //  ELSE
+      //   { show the error message }
 
       $form['menu']['#access'] = TRUE;
 
@@ -205,10 +212,11 @@ function workbench_admin_per_menu_form_alter(&$form, $form_state, $form_id){
         }
       }
 
-      // if someone else has put the node in another menu they don't have access
-      // too, disable the inputs and let them know
-      if (!in_array($form['menu']['link']['parent']['#default_value'], $availableMenuOptionArray)){
-
+      // if the user can assign a node show their assigned menus ELSE show them
+      // the 'no can do'
+      if( isNodeAvailableForAssignmentToMenu($availableMenuOptionArray) ){
+        $form['menu']['link']['parent']['#options'] = $availableMenuOptionArray;
+      } else {
         $form['menu']['#access'] = false;
 
         $form['workbench_admin_per_menu'] = array(
@@ -221,9 +229,10 @@ function workbench_admin_per_menu_form_alter(&$form, $form_state, $form_id){
         );
 
         $menuName = explode(':', $form['menu']['link']['parent']['#default_value'])[0];
-        $output = '<p>' . t('This content has been assigned to menu: <b>"'.$menuName.'"</b> for which you do not have access.') . '</p>';
+        $output = '<p>' . t('This content has already been assigned to a menu for which you do not have access.') . '</p>';
         $form['workbench_admin_per_menu']['help_text'] = array('#markup' => $output);
       }
+
     }
   }
 }
@@ -345,6 +354,51 @@ function workbench_admin_per_menu_submit($form, &$form_state){
       ->execute();
   }
 }
+
+/**
+ * I check if a node is NOT assigned to a menu or if a user has access to assign
+ * a node to one of their assigned menus.
+ *
+ * @param $availableMenuOptionArray
+ * @return bool
+ */
+function isNodeAvailableForAssignmentToMenu($availableMenuOptionArray){
+
+  // this is total crap, basic pages MIGHT default to something else... but
+  // they default to the 'navigation' menu so check this for now.
+  $defaultMenuName = 'navigation';
+  $testOne = false;
+  $testTwo = false;
+  $result = false;
+
+  $trail = menu_get_active_trail();
+  $lastInTrail = end($trail);
+  $menuName = $lastInTrail['menu_name'];
+
+  dpm($menuName);
+
+  // first test if the node is NOT assigned...
+  if($defaultMenuName === $menuName){
+    $testOne = true;
+  }
+
+  // second, test that the menu is in the users available nenus
+  foreach($availableMenuOptionArray as $key => $value){
+    $availableMenu = explode(':', $key)[0];
+
+    if($availableMenu === $menuName){
+      $testTwo = true;
+      break;
+    }
+  }
+
+  if($testOne || $testTwo){
+    $result = true;
+  }
+
+  return $result;
+}
+
 /**
  * I return an array that populates the added permissions module form field.
  *
