@@ -212,11 +212,15 @@ function workbench_admin_per_menu_form_alter(&$form, $form_state, $form_id){
         }
       }
 
+
       // if the user can assign a node show their assigned menus ELSE show them
       // the 'no can do'
-      if( isNodeAvailableForAssignmentToMenu($availableMenuOptionArray) ){
+      if( isNodeAvailableForAssignmentToMenu($availableMenuOptionArray, $form['nid']['#value']) ){
+
         $form['menu']['link']['parent']['#options'] = $availableMenuOptionArray;
+
       } else {
+
         $form['menu']['#access'] = false;
 
         $form['workbench_admin_per_menu'] = array(
@@ -360,9 +364,10 @@ function workbench_admin_per_menu_submit($form, &$form_state){
  * a node to one of their assigned menus.
  *
  * @param $availableMenuOptionArray
+ * @param $IDNode
  * @return bool
  */
-function isNodeAvailableForAssignmentToMenu($availableMenuOptionArray){
+function isNodeAvailableForAssignmentToMenu($availableMenuOptionArray, $IDNode){
 
   // this is total crap, basic pages MIGHT default to something else... but
   // they default to the 'navigation' menu so check this for now.
@@ -371,16 +376,31 @@ function isNodeAvailableForAssignmentToMenu($availableMenuOptionArray){
   $testTwo = false;
   $result = false;
 
-  $trail = menu_get_active_trail();
-  $lastInTrail = end($trail);
-  $menuName = $lastInTrail['menu_name'];
+  // old code...
+  // $trail = menu_get_active_trail();
+  // $lastInTrail = end($trail);
+  // $menuName = $lastInTrail['menu_name'];
 
-  // first test if the node is NOT assigned...
-  if($defaultMenuName === $menuName){
+  // new FIX for ambiguous places a menu can live in. This value is attached
+  // to the actual NODE that's being edited. We will check that one instead of
+  // the menu_get_active_trail();
+  // if the node already exists check its meno
+  if( isset($IDNode) ){
+
+    $theNode = node_load($IDNode);
+    $menuName = $theNode->menu['menu_name'];
+
+    // first test if the node is NOT assigned...
+    if($defaultMenuName === $menuName){
+      $testOne = true;
+    }
+
+  } else {
+    // this is a new node so pass $testOne
     $testOne = true;
   }
 
-  // second, test that the menu is in the users available nenus
+  // second, test that the menu is in the users available menus
   foreach($availableMenuOptionArray as $key => $value){
     $availableMenu = explode(':', $key)[0];
 
