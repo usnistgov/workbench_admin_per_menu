@@ -1,16 +1,15 @@
 <?php
 /**
- * @file Workbench Admin Per Menu
- *
  * I am a module that provides workbench access control for core drupal menus.
  *
- * When enabled for specific roles via permissions, users will only be allowed
- * to see and modify menus that are assigned to the same node of a taxonomy as
- * they are.
+ * @file Workbench Admin Per Menu
+ * @author John Allen
  *
- * This module only works with Workbench when Workbench is configured to use a
- * SINGLE TAXONOMY for access control. Multiple taxonomies are not supported
- * at this time.
+ * Modification Log:
+ * Name               Date              Description
+ * ============================================================================
+ * John Allen         11/10/2015        Created
+ * John Allen         03/01/2015        Bug fix for ambiguous menus context.
  */
 
 /**
@@ -395,19 +394,20 @@ function isNodeAvailableForAssignmentToMenu($availableMenuOptionArray, $IDNode){
       $testOne = true;
     }
 
+    // second, test that the menu is in the users available menus
+    foreach($availableMenuOptionArray as $key => $value){
+      $availableMenu = explode(':', $key)[0];
+
+      if($availableMenu === $menuName){
+        $testTwo = true;
+        break;
+      }
+    }
+
   } else {
     // this is a new node so pass $testOne
     $testOne = true;
-  }
-
-  // second, test that the menu is in the users available menus
-  foreach($availableMenuOptionArray as $key => $value){
-    $availableMenu = explode(':', $key)[0];
-
-    if($availableMenu === $menuName){
-      $testTwo = true;
-      break;
-    }
+    $testTwo = true;
   }
 
   if($testOne || $testTwo){
